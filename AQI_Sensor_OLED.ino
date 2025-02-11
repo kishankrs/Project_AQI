@@ -41,6 +41,26 @@ int calculateAQI(int concentration, AQIBreakpoint breakpoints[], int size) {
     return -1; // Invalid AQI
 }
 
+void drawArcReactorAnimation(int seconds) {
+    for (int i = seconds; i > 0; i--) {
+        display.clearDisplay();
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(10, 5);
+        display.print("Stabilizing: ");
+        display.print(i);
+        display.print("s");
+        
+        // Draw Arc Reactor-inspired animation lower on the screen
+        display.drawCircle(64, 40, 20, WHITE); // Outer circle
+        display.drawCircle(64, 40, 15, WHITE); // Inner circle
+        display.drawCircle(64, 40, 5 + (i % 5), WHITE); // Pulsing center
+        
+        display.display();
+        delay(1000);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     mySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
@@ -50,13 +70,12 @@ void setup() {
         for (;;);
     }
     display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(WHITE);
-    display.setCursor(0, 0);
-    display.println("Sensor Stabilizing...");
     display.display();
-    delay(30000); // Allow sensor to stabilize
+
+    Serial.println("Waiting for sensor stabilization (30 sec)...");
+    drawArcReactorAnimation(30);
     Serial.println("Sensor ready.");
+    
 }
 
 void loop() {
@@ -64,7 +83,14 @@ void loop() {
         mySerial.read();
     }
 
-    while (mySerial.available() < 2);
+    unsigned long startTime = millis();
+    while (mySerial.available() < 2) {
+        if (millis() - startTime > 3000) { // Timeout after 3 seconds
+            Serial.println("Error: Sensor data timeout");
+            return;
+        }
+    }
+    
     if (mySerial.read() != 0x42 || mySerial.read() != 0x4D) {
         Serial.println("Error: Invalid frame header");
         return;
@@ -88,15 +114,18 @@ void loop() {
     Serial.print("AQI (PM10): "); Serial.print(aqi_pm10); Serial.print(", ");
     Serial.print("Final AQI: "); Serial.println(final_aqi);
 
-    // Display values on OLED
     display.clearDisplay();
+    display.setTextSize(1);
     display.setCursor(0, 0);
     display.print("PM1.0: "); display.println(pm1_0);
     display.print("PM2.5: "); display.println(pm2_5);
     display.print("PM10: "); display.println(pm10);
-    display.print("AQI: "); display.println(final_aqi);
+    if (final_aqi == -1) {
+        display.print("AQI: HAZARD");
+    } else {
+        display.print("AQI: "); display.println(final_aqi);
+    }
     display.display();
 
     delay(1000);
 }
-
