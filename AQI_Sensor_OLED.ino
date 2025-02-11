@@ -2,6 +2,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <HardwareSerial.h>
+#include <esp_system.h>
 
 #define RX_PIN 16  // ESP32 RX (Connect to TX of MPM12-BG)
 #define TX_PIN 17  // ESP32 TX (Connect to RX of MPM12-BG)
@@ -12,6 +13,9 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 HardwareSerial mySerial(1);
+
+unsigned long errorStartTime = 0;
+bool errorState = false;
 
 struct AQIBreakpoint {
     int C_low, C_high;
@@ -61,13 +65,30 @@ void drawArcReactorAnimation(int seconds) {
     }
 }
 
+void checkAndRestart() {
+    display.clearDisplay();
+    display.setTextSize(1);
+    display.setCursor(10, 20);
+    display.print("Sensor is taking a break...");
+    display.setCursor(10, 34);
+    display.print("Maybe it inhaled    too much dust!");
+    display.display();
+    if (!errorState) {
+        errorState = true;
+        errorStartTime = millis();
+    } else if (millis() - errorStartTime > 30000) { // 30-Sec timeout
+        Serial.println("Error persists for 30 seconds. Restarting ESP...");
+        esp_restart();
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     mySerial.begin(9600, SERIAL_8N1, RX_PIN, TX_PIN);
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
         Serial.println("OLED initialization failed");
-        for (;;);
+        esp_restart(); // Restart if OLED fails
     }
     display.clearDisplay();
     display.display();
@@ -75,7 +96,6 @@ void setup() {
     Serial.println("Waiting for sensor stabilization (30 sec)...");
     drawArcReactorAnimation(30);
     Serial.println("Sensor ready.");
-    
 }
 
 void loop() {
@@ -86,15 +106,19 @@ void loop() {
     unsigned long startTime = millis();
     while (mySerial.available() < 2) {
         if (millis() - startTime > 3000) { // Timeout after 3 seconds
-            Serial.println("Error: Sensor data timeout");
+            Serial.println("Error: Sensor data timeout.");
+            checkAndRestart();
             return;
         }
     }
     
     if (mySerial.read() != 0x42 || mySerial.read() != 0x4D) {
-        Serial.println("Error: Invalid frame header");
+        Serial.println("Error: Invalid frame header.");
+        checkAndRestart();
         return;
     }
+
+    errorState = false; // Reset error timer on successful read
 
     uint8_t buffer[30];
     mySerial.readBytes(buffer, 30);
