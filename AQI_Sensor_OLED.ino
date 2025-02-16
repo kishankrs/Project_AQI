@@ -1,3 +1,28 @@
+
+/**
+ * @file esp32_aqi_serial.ino
+ * @brief AQI Sensor Data Logger using ESP32 and MPM12-BG
+ *
+ * This code reads PM1.0, PM2.5, and PM10 data from the MPM12-BG AQI sensor
+ * and displays the values on a 0.96 inch OLED screen. It also calculates
+ * the Air Quality Index (AQI) and shows a hazard warning if the AQI is invalid.
+ * 
+ * Features:
+ * - Displays real-time PM values and AQI on OLED
+ * - Cool Arc Reactor animation during sensor stabilization
+ * - Error handling with funny messages and auto-restart
+ * - Debugging logs on Serial Monitor
+ *
+ * @author Kishan Kumar
+ * @version 1.0
+ * @date 2025-02-04
+ *
+ * @hardware ESP32, MPM12-BG AQI Sensor, 0.96 inch OLED (SSD1306)
+ * @dependencies Adafruit GFX Library, Adafruit SSD1306 Library
+ *
+ * @license MIT License
+ * This code is open-source and free to use for educational and personal projects.
+ */
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -148,8 +173,23 @@ void loop() {
         display.print("AQI: HAZARD");
     } else {
         display.print("AQI: "); display.println(final_aqi);
+        display.setCursor(0, 50);
+        if (final_aqi <= 50) {
+            display.print("Good");
+        } else if (final_aqi <= 100) {
+            display.print("Satisfactory");
+        } else if (final_aqi <= 200) {
+            display.print("Moderate");
+        } else if (final_aqi <= 300) {
+            display.print("Poor");
+        } else if (final_aqi <= 500) {
+            display.print("Very Poor");
+        } else {
+            display.print("HAZARD");
+        }
     }
     display.display();
 
     delay(1000);
 }
+
